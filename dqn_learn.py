@@ -116,7 +116,8 @@ def dqn_learing(
         if sample > eps_threshold:
             obs = torch.from_numpy(obs).type(dtype).unsqueeze(0) / 255.0
             # Use volatile = True if variable is only used in inference mode, i.e. don’t save the history
-            return model(Variable(obs, volatile=True)).data.max(1)[1].cpu()
+            #return model(Variable(obs, volatile=True)).data.max(1)[1].unsqueeze(1)
+            return model(obs).data.max(1)[1].unsqueeze(1)
         else:
             return torch.IntTensor([[random.randrange(num_actions)]])
 
@@ -182,10 +183,11 @@ def dqn_learing(
             # episode, only the current state reward contributes to the target
             obs_batch, act_batch, rew_batch, next_obs_batch, done_mask = replay_buffer.sample(batch_size)
             # Convert numpy nd_array to torch variables for calculation
-            obs_batch = Variable(torch.from_numpy(obs_batch).type(dtype) / 255.0)
+            #obs_batch = Variable(torch.from_numpy(obs_batch).type(dtype) / 255.0,requires_grad=True)
+            obs_batch = Variable(torch.from_numpy(obs_batch).type(dtype) / 255.0,requires_grad=True)
             act_batch = Variable(torch.from_numpy(act_batch).long())
-            rew_batch = Variable(torch.from_numpy(rew_batch))
-            next_obs_batch = Variable(torch.from_numpy(next_obs_batch).type(dtype) / 255.0)
+            rew_batch = Variable(torch.from_numpy(rew_batch),requires_grad=True)
+            next_obs_batch = Variable(torch.from_numpy(next_obs_batch).type(dtype) / 255.0, requires_grad=True)
             not_done_mask = Variable(torch.from_numpy(1 - done_mask)).type(dtype)
 
             if USE_CUDA:
@@ -201,6 +203,10 @@ def dqn_learing(
             next_Q_values = not_done_mask * next_max_q
             # Compute the target of the current Q values
             target_Q_values = rew_batch + (gamma * next_Q_values)
+
+
+            current_Q_values=current_Q_values.squeeze(1)
+
             # Compute Bellman error
             bellman_error = target_Q_values - current_Q_values
             # clip the bellman error between [-1 , 1]
@@ -210,7 +216,7 @@ def dqn_learing(
             # Clear previous gradients before backward pass
             optimizer.zero_grad()
             # run backward pass
-            current_Q_values.backward(d_error.data.unsqueeze(1))
+            current_Q_values.backward(d_error)
 
             # Perfom the update
             optimizer.step()
